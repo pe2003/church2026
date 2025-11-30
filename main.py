@@ -3,12 +3,11 @@ import logging
 import os
 import random
 import sqlite3
-
-import pandas as pd
-from aiohttp import web
 from datetime import datetime
 from io import BytesIO
 
+import pandas as pd
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -19,18 +18,18 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import BufferedInputFile
 from aiogram.exceptions import TelegramBadRequest
 
-# ==================== КОНФИГИ ====================
+# ======================= КОНФИГИ =======================
 TOKEN = "8489962637:AAGEiIssbO9HkDGOGgB14NnAtMWPVhaHcvg"
 ADMIN_ID = 662672735
 PASSWORD = "12345"
-DEADLINE = datetime(2025, 12,9,23,59)
+DEADLINE = datetime(2025, 12, 9, 23, 59)
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 logging.basicConfig(level=logging.INFO)
 
-# ==================== БАЗА ДАННЫХ ====================
+# ======================= БАЗА =======================
 conn = sqlite3.connect("secret_santa.db", check_same_thread=False)
 cur = conn.cursor()
 cur.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -42,7 +41,7 @@ cur.execute("""CREATE TABLE IF NOT EXISTS users (
 )""")
 conn.commit()
 
-# ==================== СОСТОЯНИЯ ====================
+# ======================= СОСТОЯНИЯ =======================
 class Form(StatesGroup):
     name = State()
     wish = State()
@@ -53,7 +52,7 @@ class AdminStates(StatesGroup):
     manual_from = State()
     manual_to = State()
 
-# ==================== КЛАВИАТУРЫ ====================
+# ======================= КЛАВИАТУРЫ =======================
 def start_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="Зарегистрироваться в Тайном Друге", callback_data="reg")
@@ -76,19 +75,18 @@ def received_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="Я подарил", callback_data="got_gift")
     kb.button(text="Ещё не подарил", callback_data="no_gift")
+    kb.adjust(1)
     return kb.as_markup()
 
-# ==================== УТИЛИТЫ ====================
+# ======================= УТИЛИТА =======================
 async def safe_edit(callback: types.CallbackQuery, text: str, reply_markup=None):
-    """Безопасное редактирование сообщения — не падает на 'message is not modified'"""
     try:
         await callback.message.edit_text(text, reply_markup=reply_markup)
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e).lower():
             raise
 
-# ==================== ОБРАБОТЧИКИ ====================
-
+# ======================= ОСНОВНЫЕ ХЕНДЛЕРЫ =======================
 @dp.message(Command("start"))
 async def start(message: types.Message):
     count = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -132,8 +130,7 @@ async def gift_status(callback: types.CallbackQuery):
         conn.commit()
     await callback.answer("Спасибо за радость!", show_alert=True)
 
-# ==================== АДМИНКА ====================
-
+# ======================= АДМИНКА =======================
 @dp.message(Command("admin"))
 async def admin_enter(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
@@ -156,7 +153,7 @@ async def admin_stats(callback: types.CallbackQuery):
     total = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     done = cur.execute("SELECT COUNT(*) FROM users WHERE target_id IS NOT NULL").fetchone()[0]
     received = cur.execute("SELECT COUNT(*) FROM users WHERE received=1").fetchone()[0]
-    text = f"<b>Статистика</b>\nВсего: {total}\nРаспределено: {'Да' if done else 'Нет'}\nПолучили: {received}"
+    text = f"<b>Статистика</b>\nВсего: {total}\nРаспределено: {'Да' if done else 'Нет'}\nПолучили подарок: {received}"
     await safe_edit(callback, text, admin_menu())
 
 @dp.callback_query(F.data == "admin_list")
@@ -189,12 +186,98 @@ async def admin_shuffle(callback: types.CallbackQuery):
         await bot.send_message(uid, text, reply_markup=received_kb())
     await safe_edit(callback, "Распределение завершено!", admin_menu())
 
-# (остальные обработчики админки оставил без изменений — они работают)
-# admin_clear_db, admin_export, admin_manual, admin_broadcast и т.д.
-# если хочешь — могу добавить их тоже, но чтобы не раздувать сообщение, они остались как у тебя
+@dp.callback_query(F.data == "admin_clear_db")
+async def admin_clear_db(callback: types.CallbackQuery):
+    cur.execute("DELETE FROM users")
+    cur.execute("DELETE FROM sqlite_sequence WHERE name='users'")
+    conn.commit()
+    await safe_edit(callback, "База данных полностью очищена!\nТеперь можно начинать заново", admin_menu())
+    await callback.answer("Готово!", show_alert=True)
 
-# ==================== ВЕБХУКИ ДЛЯ RENDER ====================
+@dp.callback_query(F.data == "admin_export")
+async def admin_export(callback: types.CallbackQuery):
+    data = cur.execute("SELECT user_id, name, wish, target_id, received FROM users").fetchall()
+    if not data:
+        return await callback.answer("База пуста", show_alert=True)
+    df = pd.DataFrame(data, columns=["ID", "Имя", "Пожелание", "Дарит (ID)", "Получил"])
+    df["Дарит (Имя)"] = df["Дарит (ID)"].apply(
+        lambda x: cur.execute("SELECT name FROM users WHERE user_id=?", (x,)).fetchone()[0] if x else "—"
+    )
+    bio = BytesIO()
+    df.to_excel(bio, index=False, engine="openpyxl")
+    bio.seek(0)
+    file = BufferedInputFile(bio.read(), filename="Тайный_Друг_2025.xlsx")
+    await callback.message.answer_document(file, caption="Экспорт участников")
+    await callback.answer()
 
+@dp.callback_query(F.data == "admin_manual")
+async def admin_manual_start(callback: types.CallbackQuery, state: FSMContext):
+    users = cur.execute("SELECT user_id, name FROM users").fetchall()
+    if not users:
+        return await callback.answer("Нет участников", show_alert=True)
+    kb = InlineKeyboardBuilder()
+    for uid, name in users:
+        kb.button(text=f"{name} ({uid})", callback_data=f"from_{uid}")
+    kb.adjust(1)
+    await safe_edit(callback, "Кто будет дарить?", kb.as_markup())
+
+@dp.callback_query(F.data.startswith("from_"))
+async def admin_manual_from(callback: types.CallbackQuery, state: FSMContext):
+    from_id = int(callback.data.split("_")[1])
+    await state.update_data(from_id=from_id)
+    name = cur.execute("SELECT name FROM users WHERE user_id=?", (from_id,)).fetchone()[0]
+    users = cur.execute("SELECT user_id, name FROM users WHERE user_id != ?", (from_id,)).fetchall()
+    kb = InlineKeyboardBuilder()
+    for uid, n in users:
+        kb.button(text=f"{n} ({uid})", callback_data=f"to_{uid}")
+    kb.button(text="Отмена", callback_data="admin_cancel")
+    kb.adjust(1)
+    await state.set_state(AdminStates.manual_to)
+    await safe_edit(callback, f"<b>{name}</b> будет дарить кому?", kb.as_markup())
+
+@dp.callback_query(F.data.startswith("to_"))
+async def admin_manual_to(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    from_id = data["from_id"]
+    to_id = int(callback.data.split("_")[1])
+    cur.execute("UPDATE users SET target_id=? WHERE user_id=?", (to_id, from_id))
+    conn.commit()
+    from_name = cur.execute("SELECT name FROM users WHERE user_id=?", (from_id,)).fetchone()[0]
+    to_name = cur.execute("SELECT name FROM users WHERE user_id=?", (to_id,)).fetchone()[0]
+    wish = cur.execute("SELECT wish FROM users WHERE user_id=?", (to_id,)).fetchone()[0]
+    await bot.send_message(from_id, f"Теперь ты даришь <b>{to_name}</b>\n\nПожелание:\n{wish}", reply_markup=received_kb())
+    await safe_edit(callback, f"Готово!\n<b>{from_name}</b> → <b>{to_name}</b>", admin_menu())
+    await state.clear()
+
+@dp.callback_query(F.data == "admin_cancel")
+async def admin_cancel(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await safe_edit(callback, "Отменено", admin_menu())
+
+@dp.callback_query(F.data == "admin_broadcast")
+async def admin_broadcast_start(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(AdminStates.broadcast)
+    await safe_edit(callback, "Напиши сообщение для рассылки (можно с фото/видео):")
+
+@dp.message(AdminStates.broadcast)
+async def admin_broadcast_send(message: types.Message, state: FSMContext):
+    users = cur.execute("SELECT user_id FROM users").fetchall()
+    sent = 0
+    for (uid,) in users:
+        try:
+            await bot.copy_message(chat_id=uid, from_chat_id=message.from_user.id, message_id=message.message_id)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except:
+            pass
+    await message.answer(f"Рассылка завершена! Отправлено: {sent}", reply_markup=admin_menu())
+    await state.clear()
+
+@dp.callback_query(F.data == "admin_exit")
+async def admin_exit(callback: types.CallbackQuery):
+    await safe_edit(callback, "Вы вышли из админ-панели")
+
+# ======================= ВЕБХУКИ ДЛЯ RENDER =======================
 async def handle_webhook(request):
     update = types.Update(**await request.json())
     await dp.feed_update(bot=bot, update=update)
@@ -207,27 +290,23 @@ async def set_webhook():
         await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
         print(f"Webhook установлен: {webhook_url}")
     else:
-        print("Webhook уже установлен и актуален")
+        print("Webhook уже актуален")
 
 async def main():
-    print("Тайный Друг 2025 запущен на Render через вебхуки!")
-
-    # Устанавливаем вебхук
+    print("Тайный Друг 2025 — запуск через вебхуки на Render")
     await set_webhook()
 
-    # Создаём aiohttp-приложение
     app = web.Application()
     app.router.add_post("/webhook", handle_webhook)
 
-    # Чтобы Render видел открытый порт
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"Веб-сервер слушает порт {port}")
+    print(f"Сервер запущен на порту {port}")
 
-    # Держим процесс живым
+    # Живём вечно
     while True:
         await asyncio.sleep(3600)
 
