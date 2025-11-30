@@ -1,4 +1,4 @@
-# main.py — ФИНАЛЬНАЯ ВЕРСИЯ, 100% БЕЗ ОШИБОК
+# main.py
 import asyncio
 import logging
 import random
@@ -16,7 +16,6 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import BufferedInputFile
 
-# === НАСТРОЙКИ ===
 TOKEN = "8489962637:AAGEiIssbO9HkDGOGgB14NnAtMWPVhaHcvg"
 ADMIN_ID = 662672735
 PASSWORD = "12345"
@@ -27,7 +26,6 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 logging.basicConfig(level=logging.INFO)
 
-# === БАЗА ===
 conn = sqlite3.connect("secret_santa.db", check_same_thread=False)
 cur = conn.cursor()
 cur.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -39,7 +37,6 @@ cur.execute("""CREATE TABLE IF NOT EXISTS users (
 )""")
 conn.commit()
 
-# === СОСТОЯНИЯ ===
 class Form(StatesGroup):
     name = State()
     wish = State()
@@ -50,7 +47,6 @@ class AdminStates(StatesGroup):
     manual_from = State()
     manual_to = State()
 
-# === КЛАВИАТУРЫ ===
 def start_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="Зарегистрироваться в Тайном Друге", callback_data="reg")
@@ -72,7 +68,7 @@ def admin_menu():
     kb.button(text="Экспорт в Excel", callback_data="admin_export")
     kb.button(text="Рассылка всем", callback_data="admin_broadcast")
     kb.button(text="Выйти", callback_data="admin_exit")
-    kb.adjust(2, 2, 2, 1)
+    kb.adjust(2)
     return kb.as_markup()
 
 # === СТАРТ ===
@@ -256,7 +252,7 @@ async def admin_exit(callback: types.CallbackQuery):
 
 # === ЗАПУСК ===
 async def main():
-    print("Тайный Друг 2025 запущен! Все функции работают!")
+    print("Тайный Друг 2025 запущен на Render!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
