@@ -252,15 +252,11 @@ async def admin_broadcast_send(message: types.Message, state: FSMContext):
 async def admin_exit(callback: types.CallbackQuery):
     await callback.message.edit_text("Вы вышли из админки")
 
-import uvicorn
-from aiohttp import web
 
-async def health(request):
-    return web.Response(text="Бот живёт ❤️")
 
 # Было:
 async def main():
-    print("Тайный Друг 2025 запущен!")
+    print("Тайный Друг 2025 запущен 24/7 на Render!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
