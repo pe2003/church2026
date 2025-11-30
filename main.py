@@ -252,9 +252,23 @@ async def admin_broadcast_send(message: types.Message, state: FSMContext):
 async def admin_exit(callback: types.CallbackQuery):
     await callback.message.edit_text("Вы вышли из админки")
 
-# === ЗАПУСК ===
+import uvicorn
+from aiohttp import web
+
+async def health(request):
+    return web.Response(text="Бот живёт ❤️")
+
 async def main():
-    print("Тайный Друг 2025 запущен на Render!")
+    # Запускаем и polling, и фейковый веб-сервер одновременно
+    app = web.Application()
+    app.router.add_get('/', health)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 10000)  # любой порт
+    await site.start()
+    
+    print("Бот запущен 24/7 + веб-порт для Render")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
