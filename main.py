@@ -59,6 +59,7 @@ def admin_menu():
     kb.button(text="Распределить всем", callback_data="admin_shuffle")
     kb.button(text="Перераспределить одного", callback_data="admin_manual")
     kb.button(text="Экспорт в Excel", callback_data="admin_export")
+    kb.button(text="🗑 Очистить базу", callback_data="admin_clear_db")
     kb.button(text="Рассылка всем", callback_data="admin_broadcast")
     kb.button(text="Выйти", callback_data="admin_exit")
     kb.adjust(2)
@@ -166,6 +167,14 @@ async def admin_shuffle(callback: types.CallbackQuery):
         await bot.send_message(uid, text, reply_markup=received_kb())
     await callback.message.edit_text("Распределение завершено!", reply_markup=admin_menu())
 
+@dp.callback_query(F.data == "admin_clear_db")
+async def admin_clear_db(callback: types.CallbackQuery):
+    cur.execute("DELETE FROM users")
+    cur.execute("DELETE FROM sqlite_sequence WHERE name='users'")  # сброс автоинкремента
+    conn.commit()
+    await callback.message.edit_text("🗑 База данных полностью очищена!\nТеперь можно начинать заново 🎄", reply_markup=admin_menu())
+    await callback.answer("Готово!", show_alert=True)
+    
 @dp.callback_query(F.data == "admin_export")
 async def admin_export(callback: types.CallbackQuery):
     data = cur.execute("SELECT user_id, name, wish, target_id, received FROM users").fetchall()
