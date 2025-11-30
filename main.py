@@ -52,13 +52,6 @@ def start_kb():
     kb.button(text="Зарегистрироваться в Тайном Друге", callback_data="reg")
     return kb.as_markup()
 
-def received_kb():
-    kb = InlineKeyboardBuilder()
-    kb.button(text="Да, получил подарок!", callback_data="got_gift")
-    kb.button(text="Пока не получил", callback_data="no_gift")
-    kb.adjust(1)
-    return kb.as_markup()
-
 def admin_menu():
     kb = InlineKeyboardBuilder()
     kb.button(text="Статистика", callback_data="admin_stats")
