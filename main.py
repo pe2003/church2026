@@ -258,17 +258,9 @@ from aiohttp import web
 async def health(request):
     return web.Response(text="Бот живёт ❤️")
 
+# Было:
 async def main():
-    # Запускаем и polling, и фейковый веб-сервер одновременно
-    app = web.Application()
-    app.router.add_get('/', health)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 10000)  # любой порт
-    await site.start()
-    
-    print("Бот запущен 24/7 + веб-порт для Render")
+    print("Тайный Друг 2025 запущен!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
